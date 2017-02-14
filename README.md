@@ -1,6 +1,7 @@
 # u2f-jc-applet
-This U2F JavaCard Applet is based on the [Ledger U2F Applet](https://github.com/LedgerHQ/ledger-u2f-javacard). I import this applet to Eclipse with installed JCOP Tools and modified the AID of this applet to the standardized AID for FIDO NFC token (	0xA0000006472F0001). I also provide some example data ([Attestation Certificate and Key](u2f-javacard/U2F Example Attestation Certificate and Key Bytes.txt)) to bring this applet to run. The example data is sourced in the specification [FIDO U2F Raw Message Formats] (https://fidoalliance.org/specs/fido-u2f-v1.0-nfc-bt-amendment-20150514/fido-u2f-raw-message-formats.html#examples).
+This U2F JavaCard Applet is based on the [Ledger U2F Applet](https://github.com/LedgerHQ/ledger-u2f-javacard). I imported this applet to Eclipse with installed JCOP Tools and modified the AID of this applet to the standardized AID for FIDO NFC token (	0xA0000006472F0001). I also provided some example data ([Attestation Certificate and Key](u2f-javacard/U2F Example Attestation Certificate and Key Bytes.txt)) to bring this applet to run. The example data is sourced in the specification [FIDO U2F Raw Message Formats] (https://fidoalliance.org/specs/fido-u2f-v1.0-nfc-bt-amendment-20150514/fido-u2f-raw-message-formats.html#examples).
 
+## Installing
 The following install parameters are expected : 
 
   - 1 byte flag : provide 01 to pass the current [Fido NFC interoperability tests](https://github.com/google/u2f-ref-code/tree/master/u2f-tests), or 00 
@@ -35,3 +36,10 @@ F0 01 00 80 80 31 32 38 30 30 30 31 31 35 35 39 35 37 33 35 32 30 59 30 13 06 07
 <pre>
 F0 01 01 00 40 b6 06 1e 9c 22 26 2d 1a ac 1d 96 d8 c7 08 29 b2 36 65 31 dd a2 68 83 2c b8 36 bc d3 0d fa 02 20 63 1b 14 59 f0 9e 63 30 05 57 22 c8 d8 9b 7f 48 88 3b 90 89 b8 8d 60 d1 d9 79 59 02 b3 04 10 df
 </pre>
+
+
+## Testing on Android 
+
+  - Download [Google Authenticator](https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2)
+  - Test on http://u2fdemo.appspot.com or https://demo.yubico.com/u2f from Chrome
+  - For additional API reference and implementations, check [the reference code](https://github.com/google/u2f-ref-code), the [beta NFC API](https://github.com/google/u2f-ref-code/blob/no-extension/u2f-gae-demo/war/js/u2f-api.js) and [Yubico guide](https://www.yubico.com/applications/fido/) 
