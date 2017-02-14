@@ -1,5 +1,5 @@
 # u2f-jc-applet
-This U2F JavaCard Applet is based on the [Ledger U2F Applet](https://github.com/LedgerHQ/ledger-u2f-javacard). I import this applet to Eclipse with installed JCOP Tools and modified the AID of this applet to the standardized AID for FIDO NFC token (	0xA0000006472F0001). I also provide some example data (Attestation Certificate and Key) to bring this applet to run.
+This U2F JavaCard Applet is based on the [Ledger U2F Applet](https://github.com/LedgerHQ/ledger-u2f-javacard). I import this applet to Eclipse with installed JCOP Tools and modified the AID of this applet to the standardized AID for FIDO NFC token (	0xA0000006472F0001). I also provide some example data ([Attestation Certificate and Key](u2f-javacard/U2F Example Attestation Certificate and Key Bytes.txt)) to bring this applet to run. The example data is sourced in the specification [FIDO U2F Raw Message Formats] (https://fidoalliance.org/specs/fido-u2f-v1.0-nfc-bt-amendment-20150514/fido-u2f-raw-message-formats.html#examples).
 
 The following install parameters are expected : 
 
