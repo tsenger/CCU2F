@@ -28,6 +28,7 @@ import javacard.security.ECPublicKey;
 import javacard.security.KeyAgreement;
 import javacard.security.KeyBuilder;
 import javacard.security.KeyPair;
+import javacard.security.MessageDigest;
 import javacard.security.RandomData;
 import javacard.security.Signature;
 
@@ -38,16 +39,14 @@ import com.nxp.id.jcopx.SignatureX;
 public class FIDOCCImplementation implements FIDOAPI {
 
     private static KeyPair keyPair;
-    private static AESKey drngKey1;
-    private static AESKey drngKey2;
     private static AESKey macKey;
-    private static Signature drng1;
-    private static Signature drng2;
+    private static byte[] seed;
     private static Signature cmacSign;
     private static Signature cmacVerify;
     private static RandomData random;
     private static byte[] scratch;    
     private static KeyAgreement ecMultiplyHelper;
+    private static MessageDigest sha256;
 
 
     public FIDOCCImplementation() {
@@ -55,6 +54,7 @@ public class FIDOCCImplementation implements FIDOAPI {
     	random = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
     	
         scratch = JCSystem.makeTransientByteArray((short)32, JCSystem.CLEAR_ON_DESELECT);
+        seed = new byte[32];
         
         keyPair = new KeyPair(
             (ECPublicKey)KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PUBLIC, KeyBuilder.LENGTH_EC_FP_256, false),
@@ -62,17 +62,10 @@ public class FIDOCCImplementation implements FIDOAPI {
         Secp256r1.setCommonCurveParameters((ECKey)keyPair.getPrivate());
         Secp256r1.setCommonCurveParameters((ECKey)keyPair.getPublic());
                 
-        // Initialize the unique key for DRNG function (AES CMAC)
-        drngKey1 = (AESKey)KeyBuilderX.buildKey(KeyBuilderX.TYPE_AES_STATIC, KeyBuilder.LENGTH_AES_128, false);
-        drngKey2 = (AESKey)KeyBuilderX.buildKey(KeyBuilderX.TYPE_AES_STATIC, KeyBuilder.LENGTH_AES_128, false);
-        random.generateData(scratch, (short)0, (short)32);
-        drngKey1.setKey(scratch, (short)0);
-        drngKey2.setKey(scratch, (short)16);
-        
-        drng1 = SignatureX.getInstance(SignatureX.ALG_AES_CMAC16, false);
-        drng1.init(drngKey1, Signature.MODE_SIGN);
-        drng2 = SignatureX.getInstance(SignatureX.ALG_AES_CMAC16, false);
-        drng2.init(drngKey2, Signature.MODE_SIGN);
+        // Initialize the unique seed for DRNG function 
+        random.generateData(seed, (short)0, (short)32);
+ 
+        sha256 = MessageDigest.getInstance(MessageDigest.ALG_SHA_256, false);
         
         // Initialize the unique key for MAC function (AES CMAC)
         macKey = (AESKey)KeyBuilderX.buildKey(KeyBuilderX.TYPE_AES_STATIC, KeyBuilder.LENGTH_AES_128, false);
@@ -100,22 +93,53 @@ public class FIDOCCImplementation implements FIDOAPI {
 		return ecMultiplyHelper.generateSecret(Secp256r1.SECP256R1_G, (short) 0, (short) 65, pointOutputBuffer, offset);
 	}
 	
-	private void generatePrivateKey(byte[] applicationParameter, short applicationParameterOffset, byte[] keyHandle, short keyHandleOffset) {
-		drng1.update(applicationParameter, applicationParameterOffset, (short) 32);
-    	drng1.sign(keyHandle, keyHandleOffset, (short) 48, scratch, (short) 0);
-    	drng2.update(applicationParameter, applicationParameterOffset, (short) 32);
-    	drng2.sign(keyHandle, keyHandleOffset, (short) 48, scratch, (short) 16);
+
+	private void generatePrivateKey(byte[] nonceBuffer, short nonceBufferOffset, byte[] applicationParameter, short applicationParameterOffset) {
+		Util.arrayFillNonAtomic(scratch, (short)0, (short)32, (byte)0x00);
+		sha256.update(seed, (short) 0, (short) 32);
+		sha256.update(applicationParameter, applicationParameterOffset, (short) 32);
+		sha256.doFinal(nonceBuffer, nonceBufferOffset, (short) 48, scratch, (short) 0);
+
 	}
+	
+    private short computeHmacSha256(byte[] key, short key_offset, short key_length, 
+			byte[] message, short message_offset, short message_length,
+			byte[] mac, short mac_offset){
+
+    	short BLOCKSIZE=64; 
+    	short HASHSIZE=32; 
+    	
+		// compute inner hash
+		for (short i=0; i<key_length; i++){
+			scratch[i]= (byte) (key[(short)(key_offset+i)] ^ (0x36));
+		}
+		Util.arrayFillNonAtomic(scratch, key_length, (short)(BLOCKSIZE-key_length), (byte)0x36);		
+		Util.arrayCopyNonAtomic(message, message_offset, scratch, BLOCKSIZE, message_length);
+		//Sha512.reset();
+		//Sha512.doFinal(data, (short)0, (short)(BLOCKSIZE+message_length), data, BLOCKSIZE); // copy hash result to data buffer!
+		sha256.resetUpdateDoFinal(data, (short)0, (short)(BLOCKSIZE+message_length), data, BLOCKSIZE); // copy hash result to data buffer!
+		
+		// compute outer hash
+		for (short i=0; i<key_length; i++){
+			data[i]= (byte) (key[(short)(key_offset+i)] ^ (0x5c));
+		}
+		Util.arrayFillNonAtomic(data, key_length, (short)(BLOCKSIZE-key_length), (byte)0x5c);
+		// previous hash already copied to correct offset in data
+		//Sha512.reset();
+		//Sha512.doFinal(data, (short)0, (short)(BLOCKSIZE+HASHSIZE), mac, mac_offset);
+		Sha512.resetUpdateDoFinal(data, (short)0, (short)(BLOCKSIZE+HASHSIZE), mac, mac_offset);
+		
+		return HASHSIZE;
+}
 
     public short generateKeyAndWrap(byte[] applicationParameter, short applicationParameterOffset, ECPrivateKey generatedPrivateKey, byte[] publicKey, short publicKeyOffset, byte[] keyHandle, short keyHandleOffset) {
         // Generate 48 byte nonce
     	random.generateData(keyHandle, keyHandleOffset, (short) 48);
     	
     	//Generate PrivKey 
+
     	generatePrivateKey(applicationParameter, applicationParameterOffset, keyHandle, keyHandleOffset);
-    	
-    	//TODO Remove! Only for TEST !!!
-//    	random.generateData(scratch, (short)0, (short) 32);
+
     	
     	// Set private Key S, before generating Public Key
     	((ECPrivateKey)keyPair.getPrivate()).setS(scratch, (short) 0, (short) 32);
@@ -141,7 +165,11 @@ public class FIDOCCImplementation implements FIDOAPI {
     	
     	//only get key if signing is required
         if (unwrappedPrivateKey != null) {
+
         	generatePrivateKey(applicationParameter, applicationParameterOffset, keyHandle, keyHandleOffset);
+
+        	//Regenerate PrivKey 
+        	generatePrivateKey(keyHandle, keyHandleOffset, applicationParameter, applicationParameterOffset);
         	
             unwrappedPrivateKey.setS(scratch, (short)0, (short)32);
         }
