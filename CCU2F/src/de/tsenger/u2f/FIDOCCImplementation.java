@@ -53,8 +53,8 @@ public class FIDOCCImplementation implements FIDOAPI {
     	
     	random = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
     	
-        scratch = JCSystem.makeTransientByteArray((short)32, JCSystem.CLEAR_ON_DESELECT);
-        seed = new byte[32];
+        scratch = JCSystem.makeTransientByteArray((short)64, JCSystem.CLEAR_ON_DESELECT);
+        seed = new byte[64];
         
         keyPair = new KeyPair(
             (ECPublicKey)KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PUBLIC, KeyBuilder.LENGTH_EC_FP_256, false),
@@ -63,7 +63,7 @@ public class FIDOCCImplementation implements FIDOAPI {
         Secp256r1.setCommonCurveParameters((ECKey)keyPair.getPublic());
                 
         // Initialize the unique seed for DRNG function 
-        random.generateData(seed, (short)0, (short)32);
+        random.generateData(seed, (short)0, (short)64);
  
         sha256 = MessageDigest.getInstance(MessageDigest.ALG_SHA_256, false);
         
@@ -94,40 +94,40 @@ public class FIDOCCImplementation implements FIDOAPI {
 	}
 	
 
-	private void generatePrivateKey(byte[] nonceBuffer, short nonceBufferOffset, byte[] applicationParameter, short applicationParameterOffset) {
-		Util.arrayFillNonAtomic(scratch, (short)0, (short)32, (byte)0x00);
-		sha256.update(seed, (short) 0, (short) 32);
-		sha256.update(applicationParameter, applicationParameterOffset, (short) 32);
-		sha256.doFinal(nonceBuffer, nonceBufferOffset, (short) 48, scratch, (short) 0);
+	private void generatePrivateKey(byte[] applicationParameter, short applicationParameterOffset, byte[] nonceBuffer, short nonceBufferOffset) {
+		Util.arrayCopy(applicationParameter, applicationParameterOffset, scratch, (short) 0, (short)  32);
+		Util.arrayCopy(nonceBuffer, nonceBufferOffset, scratch, (short) 32, (short) 32); // we use only 32 byte of the nonce to avoid that message length gets bigger then blocksize (64 Byte)
+		computeHmacSha256(seed, (short) 0, (short) 64, scratch, (short) 0, (short) 64, scratch, (short) 0);
+
 
 	}
 	
     private short computeHmacSha256(byte[] key, short key_offset, short key_length, 
 			byte[] message, short message_offset, short message_length,
 			byte[] mac, short mac_offset){
+    	
+    	byte[] hmacBuffer = JCSystem.makeTransientByteArray((short) 128, JCSystem.CLEAR_ON_DESELECT);
 
     	short BLOCKSIZE=64; 
-    	short HASHSIZE=32; 
+    	short HASHSIZE=32;
     	
 		// compute inner hash
 		for (short i=0; i<key_length; i++){
-			scratch[i]= (byte) (key[(short)(key_offset+i)] ^ (0x36));
+			hmacBuffer[i]= (byte) (key[(short)(key_offset+i)] ^ (0x36));
 		}
-		Util.arrayFillNonAtomic(scratch, key_length, (short)(BLOCKSIZE-key_length), (byte)0x36);		
-		Util.arrayCopyNonAtomic(message, message_offset, scratch, BLOCKSIZE, message_length);
-		//Sha512.reset();
-		//Sha512.doFinal(data, (short)0, (short)(BLOCKSIZE+message_length), data, BLOCKSIZE); // copy hash result to data buffer!
-		sha256.resetUpdateDoFinal(data, (short)0, (short)(BLOCKSIZE+message_length), data, BLOCKSIZE); // copy hash result to data buffer!
+		Util.arrayFillNonAtomic(hmacBuffer, key_length, (short)(BLOCKSIZE-key_length), (byte)0x36);		
+		Util.arrayCopyNonAtomic(message, message_offset, hmacBuffer, BLOCKSIZE, message_length);
+		sha256.reset();
+		sha256.doFinal(hmacBuffer, (short)0, (short)(BLOCKSIZE+message_length), hmacBuffer, BLOCKSIZE); // copy hash result to data buffer!
 		
 		// compute outer hash
 		for (short i=0; i<key_length; i++){
-			data[i]= (byte) (key[(short)(key_offset+i)] ^ (0x5c));
+			hmacBuffer[i]= (byte) (key[(short)(key_offset+i)] ^ (0x5c));
 		}
-		Util.arrayFillNonAtomic(data, key_length, (short)(BLOCKSIZE-key_length), (byte)0x5c);
-		// previous hash already copied to correct offset in data
-		//Sha512.reset();
-		//Sha512.doFinal(data, (short)0, (short)(BLOCKSIZE+HASHSIZE), mac, mac_offset);
-		Sha512.resetUpdateDoFinal(data, (short)0, (short)(BLOCKSIZE+HASHSIZE), mac, mac_offset);
+		Util.arrayFillNonAtomic(hmacBuffer, key_length, (short)(BLOCKSIZE-key_length), (byte)0x5c);
+		// previous hash already copied to correct offset in scratch
+		sha256.reset();
+		sha256.doFinal(hmacBuffer, (short)0, (short)(BLOCKSIZE+HASHSIZE), mac, mac_offset);
 		
 		return HASHSIZE;
 }
@@ -137,7 +137,6 @@ public class FIDOCCImplementation implements FIDOAPI {
     	random.generateData(keyHandle, keyHandleOffset, (short) 48);
     	
     	//Generate PrivKey 
-
     	generatePrivateKey(applicationParameter, applicationParameterOffset, keyHandle, keyHandleOffset);
 
     	
@@ -166,10 +165,8 @@ public class FIDOCCImplementation implements FIDOAPI {
     	//only get key if signing is required
         if (unwrappedPrivateKey != null) {
 
-        	generatePrivateKey(applicationParameter, applicationParameterOffset, keyHandle, keyHandleOffset);
-
         	//Regenerate PrivKey 
-        	generatePrivateKey(keyHandle, keyHandleOffset, applicationParameter, applicationParameterOffset);
+        	generatePrivateKey(applicationParameter, applicationParameterOffset, keyHandle, keyHandleOffset);
         	
             unwrappedPrivateKey.setS(scratch, (short)0, (short)32);
         }
