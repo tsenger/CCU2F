@@ -98,17 +98,21 @@ public class FIDOCCImplementation implements FIDOAPI {
 	private short generatePublicKeyPoint(byte[] pointOutputBuffer, short offset){
 		ecMultiplyHelper.init(keyPair.getPrivate());
 		return ecMultiplyHelper.generateSecret(Secp256r1.SECP256R1_G, (short) 0, (short) 65, pointOutputBuffer, offset);
-}
+	}
+	
+	private void generatePrivateKey(byte[] applicationParameter, short applicationParameterOffset, byte[] keyHandle, short keyHandleOffset) {
+		drng1.update(applicationParameter, applicationParameterOffset, (short) 32);
+    	drng1.sign(keyHandle, keyHandleOffset, (short) 48, scratch, (short) 0);
+    	drng2.update(applicationParameter, applicationParameterOffset, (short) 32);
+    	drng2.sign(keyHandle, keyHandleOffset, (short) 48, scratch, (short) 16);
+	}
 
     public short generateKeyAndWrap(byte[] applicationParameter, short applicationParameterOffset, ECPrivateKey generatedPrivateKey, byte[] publicKey, short publicKeyOffset, byte[] keyHandle, short keyHandleOffset) {
         // Generate 48 byte nonce
     	random.generateData(keyHandle, keyHandleOffset, (short) 48);
     	
     	//Generate PrivKey 
-    	drng1.update(applicationParameter, applicationParameterOffset, (short) 32);
-    	drng1.sign(keyHandle, keyHandleOffset, (short) 48, scratch, (short) 0);
-    	drng2.update(applicationParameter, applicationParameterOffset, (short) 32);
-    	drng2.sign(keyHandle, keyHandleOffset, (short) 48, scratch, (short) 16);
+    	generatePrivateKey(applicationParameter, applicationParameterOffset, keyHandle, keyHandleOffset);
     	
     	//TODO Remove! Only for TEST !!!
 //    	random.generateData(scratch, (short)0, (short) 32);
@@ -137,11 +141,7 @@ public class FIDOCCImplementation implements FIDOAPI {
     	
     	//only get key if signing is required
         if (unwrappedPrivateKey != null) {
-        	//Regenerate PrivKey 
-        	drng1.update(applicationParameter, applicationParameterOffset, (short) 32);
-        	drng1.sign(keyHandle, keyHandleOffset, (short) 48, scratch, (short) 0);
-        	drng2.update(applicationParameter, applicationParameterOffset, (short) 32);
-        	drng2.sign(keyHandle, keyHandleOffset, (short) 48, scratch, (short) 16);
+        	generatePrivateKey(applicationParameter, applicationParameterOffset, keyHandle, keyHandleOffset);
         	
             unwrappedPrivateKey.setS(scratch, (short)0, (short)32);
         }
