@@ -115,7 +115,7 @@ public class FIDOCCImplementation implements FIDOAPI {
 		for (short i=0; i<key_length; i++){
 			hmacBuffer[i]= (byte) (key[(short)(key_offset+i)] ^ (0x36));
 		}
-		Util.arrayFillNonAtomic(hmacBuffer, key_length, (short)(BLOCKSIZE-key_length), (byte)0x36);		
+		Util.arrayFillNonAtomic(hmacBuffer, key_length, (short)(BLOCKSIZE-key_length), (byte)0);		
 		Util.arrayCopyNonAtomic(message, message_offset, hmacBuffer, BLOCKSIZE, message_length);
 		sha256.reset();
 		sha256.doFinal(hmacBuffer, (short)0, (short)(BLOCKSIZE+message_length), hmacBuffer, BLOCKSIZE); // copy hash result to data buffer!
@@ -124,7 +124,7 @@ public class FIDOCCImplementation implements FIDOAPI {
 		for (short i=0; i<key_length; i++){
 			hmacBuffer[i]= (byte) (key[(short)(key_offset+i)] ^ (0x5c));
 		}
-		Util.arrayFillNonAtomic(hmacBuffer, key_length, (short)(BLOCKSIZE-key_length), (byte)0x5c);
+		Util.arrayFillNonAtomic(hmacBuffer, key_length, (short)(BLOCKSIZE-key_length), (byte)0);
 		// previous hash already copied to correct offset in scratch
 		sha256.reset();
 		sha256.doFinal(hmacBuffer, (short)0, (short)(BLOCKSIZE+HASHSIZE), mac, mac_offset);
