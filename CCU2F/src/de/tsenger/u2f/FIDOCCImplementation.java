@@ -40,7 +40,7 @@ public class FIDOCCImplementation implements FIDOAPI {
 
     private static KeyPair keyPair;
     private static AESKey macKey;
-    private static byte[] seed;
+    private static AESKey drngSeed1, drngSeed2;
     private static Signature cmacSign;
     private static Signature cmacVerify;
     private static RandomData random;
@@ -54,7 +54,7 @@ public class FIDOCCImplementation implements FIDOAPI {
     	random = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
     	
         scratch = JCSystem.makeTransientByteArray((short)32, JCSystem.CLEAR_ON_DESELECT);
-        seed = new byte[32];
+        
         
         keyPair = new KeyPair(
             (ECPublicKey)KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PUBLIC, KeyBuilder.LENGTH_EC_FP_256, false),
@@ -63,8 +63,14 @@ public class FIDOCCImplementation implements FIDOAPI {
         Secp256r1.setCommonCurveParameters((ECKey)keyPair.getPublic());
                 
         // Initialize the unique seed for DRNG function 
-        random.generateData(seed, (short)0, (short)32);
- 
+        random.generateData(scratch, (short)0, (short)16);
+        drngSeed1 = (AESKey)KeyBuilderX.buildKey(KeyBuilderX.TYPE_AES_STATIC, KeyBuilder.LENGTH_AES_128, false);
+        drngSeed1.setKey(scratch, (short)0);
+        
+        random.generateData(scratch, (short)0, (short)16);
+        drngSeed2 = (AESKey)KeyBuilderX.buildKey(KeyBuilderX.TYPE_AES_STATIC, KeyBuilder.LENGTH_AES_128, false);
+        drngSeed2.setKey(scratch, (short)0);
+        
         sha256 = MessageDigest.getInstance(MessageDigest.ALG_SHA_256, false);
         
         // Initialize the unique key for MAC function (AES CMAC)
@@ -95,9 +101,12 @@ public class FIDOCCImplementation implements FIDOAPI {
 	
 	private void generatePrivateKey(byte[] nonceBuffer, short nonceBufferOffset, byte[] applicationParameter, short applicationParameterOffset) {
 		Util.arrayFillNonAtomic(scratch, (short)0, (short)32, (byte)0x00);
-		sha256.update(seed, (short) 0, (short) 32);
+		drngSeed1.getKey(scratch, (short) 0);
+		sha256.update(scratch, (short) 0, (short) 16);
 		sha256.update(applicationParameter, applicationParameterOffset, (short) 32);
-		sha256.doFinal(nonceBuffer, nonceBufferOffset, (short) 48, scratch, (short) 0);
+		sha256.update(nonceBuffer, nonceBufferOffset, (short) 48);
+		drngSeed2.getKey(scratch, (short) 0);
+		sha256.doFinal(scratch, (short) 0, (short) 16, scratch, (short) 0);
 		
 	}
 
