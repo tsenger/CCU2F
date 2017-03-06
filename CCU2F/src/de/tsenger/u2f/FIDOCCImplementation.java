@@ -30,19 +30,15 @@ import javacard.security.KeyBuilder;
 import javacard.security.KeyPair;
 import javacard.security.MessageDigest;
 import javacard.security.RandomData;
-import javacard.security.Signature;
 
 import com.nxp.id.jcopx.KeyAgreementX;
 import com.nxp.id.jcopx.KeyBuilderX;
-import com.nxp.id.jcopx.SignatureX;
 
 public class FIDOCCImplementation implements FIDOAPI {
 
     private static KeyPair keyPair;
-    private static AESKey macKey;
+    private static AESKey macKey1, macKey2;
     private static AESKey drngSeed1, drngSeed2;
-    private static Signature cmacSign;
-    private static Signature cmacVerify;
     private static RandomData random;
     private static byte[] scratch;    
     private static KeyAgreement ecMultiplyHelper;
@@ -55,37 +51,36 @@ public class FIDOCCImplementation implements FIDOAPI {
     	
         scratch = JCSystem.makeTransientByteArray((short)32, JCSystem.CLEAR_ON_DESELECT);
         
-        
         keyPair = new KeyPair(
             (ECPublicKey)KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PUBLIC, KeyBuilder.LENGTH_EC_FP_256, false),
             (ECPrivateKey)KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PRIVATE, KeyBuilder.LENGTH_EC_FP_256, false));
         Secp256r1.setCommonCurveParameters((ECKey)keyPair.getPrivate());
         Secp256r1.setCommonCurveParameters((ECKey)keyPair.getPublic());
                 
-        // Initialize the unique seed for DRNG function 
-        random.generateData(scratch, (short)0, (short)16);
+        // Initialize the unique seed for DRNG function       
         drngSeed1 = (AESKey)KeyBuilderX.buildKey(KeyBuilderX.TYPE_AES_STATIC, KeyBuilder.LENGTH_AES_128, false);
-        drngSeed1.setKey(scratch, (short)0);
-        
-        random.generateData(scratch, (short)0, (short)16);
         drngSeed2 = (AESKey)KeyBuilderX.buildKey(KeyBuilderX.TYPE_AES_STATIC, KeyBuilder.LENGTH_AES_128, false);
-        drngSeed2.setKey(scratch, (short)0);
-        
-        sha256 = MessageDigest.getInstance(MessageDigest.ALG_SHA_256, false);
-        
-        // Initialize the unique key for MAC function (AES CMAC)
-        macKey = (AESKey)KeyBuilderX.buildKey(KeyBuilderX.TYPE_AES_STATIC, KeyBuilder.LENGTH_AES_128, false);
         random.generateData(scratch, (short)0, (short)16);
-        macKey.setKey(scratch, (short)0);
+        drngSeed1.setKey(scratch, (short)0);        
+        random.generateData(scratch, (short)0, (short)16);        
+        drngSeed2.setKey(scratch, (short)0);                
         
-        cmacSign = SignatureX.getInstance(SignatureX.ALG_AES_CMAC16, false);
-        cmacSign.init(macKey, Signature.MODE_SIGN);
+        // Initialize the unique keys for MAC function
+        macKey1 = (AESKey)KeyBuilderX.buildKey(KeyBuilderX.TYPE_AES_STATIC, KeyBuilder.LENGTH_AES_128, false);
+        macKey2 = (AESKey)KeyBuilderX.buildKey(KeyBuilderX.TYPE_AES_STATIC, KeyBuilder.LENGTH_AES_128, false);
+        random.generateData(scratch, (short)0, (short)16);
+        macKey1.setKey(scratch, (short)0);
+        random.generateData(scratch, (short)0, (short)16);
+        macKey2.setKey(scratch, (short)0);
         
-        cmacVerify = SignatureX.getInstance(SignatureX.ALG_AES_CMAC16, false);
-        cmacVerify.init(macKey, Signature.MODE_VERIFY);
+        //Delete Key in scratch
+        random.generateData(scratch, (short)0, (short)16);
         
         // Initialize ecMultiplier 
         ecMultiplyHelper = KeyAgreementX.getInstance(KeyAgreementX.ALG_EC_SVDP_DH_PLAIN_XY, false);
+        
+        // Initialize SHA256 (used as DRNG and MAC calculation)
+        sha256 = MessageDigest.getInstance(MessageDigest.ALG_SHA_256, false);
     }
     
     /**
@@ -111,12 +106,14 @@ public class FIDOCCImplementation implements FIDOAPI {
 		
 	}
 	
-	private void calcMAC(byte[] applicationParameter, short applicationParameterOffset, byte[] nonceBuffer, short nonceBufferOffset, byte[] macValue, short macValueOffset) {
-		macKey.getKey(scratch, (short) 0);
+	private void calcMAC(byte[] applicationParameter, short applicationParameterOffset, byte[] nonceBuffer, short nonceBufferOffset) {
+		macKey1.getKey(scratch, (short) 0);
 		sha256.reset();
 		sha256.update(scratch, (short)0, (short) 16);
 		sha256.update(applicationParameter, applicationParameterOffset, (short) 32);
-		sha256.doFinal(nonceBuffer, nonceBufferOffset, (short) 32, macValue, macValueOffset);
+		sha256.update(nonceBuffer, nonceBufferOffset, (short) 32);
+		macKey2.getKey(scratch, (short) 0);
+		sha256.doFinal(scratch, (short) 0, (short) 16, scratch, (short)0);		
 	}
 
     public short generateKeyAndWrap(byte[] applicationParameter, short applicationParameterOffset, ECPrivateKey generatedPrivateKey, byte[] publicKey, short publicKeyOffset, byte[] keyHandle, short keyHandleOffset) {
@@ -135,7 +132,8 @@ public class FIDOCCImplementation implements FIDOAPI {
     	Util.arrayFillNonAtomic(scratch, (short)0, (short)32, (byte)0x00);
     	((ECPrivateKey)keyPair.getPrivate()).setS(scratch, (short) 0, (short) 32);
     	
-    	calcMAC(applicationParameter, applicationParameterOffset, keyHandle, keyHandleOffset, keyHandle, (short) (keyHandleOffset + 32));
+    	calcMAC(applicationParameter, applicationParameterOffset, keyHandle, keyHandleOffset);
+    	Util.arrayCopyNonAtomic(scratch, (short) 0, keyHandle, (short) (keyHandleOffset + 32), (short) 32);
         
         return (short)64;
     }
@@ -143,8 +141,9 @@ public class FIDOCCImplementation implements FIDOAPI {
     public boolean unwrap(byte[] keyHandle, short keyHandleOffset, short keyHandleLength, byte[] applicationParameter, short applicationParameterOffset, ECPrivateKey unwrappedPrivateKey) {
         // Verify
     	
-    	calcMAC(applicationParameter, applicationParameterOffset, keyHandle, keyHandleOffset, scratch, (short) 0);
+    	calcMAC(applicationParameter, applicationParameterOffset, keyHandle, keyHandleOffset);
     	
+    	//Compare MAC
     	if (Util.arrayCompare(scratch, (short) 0, keyHandle, (short)(keyHandleOffset+32), (short)32)!=0) {
     		return false;
     	}
