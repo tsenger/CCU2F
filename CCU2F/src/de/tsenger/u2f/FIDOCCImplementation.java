@@ -1,7 +1,8 @@
 /*
 *******************************************************************************
-*   FIDO U2F Authenticator
-*   (c) 2015 Ledger
+*   FIDO CCU2F Authenticator
+*   (c) 2017 tsenger
+*   based on FIDO U2F Authenticator by Ledger 
 *
 *  Licensed under the Apache License, Version 2.0 (the "License");
 *  you may not use this file except in compliance with the License.
