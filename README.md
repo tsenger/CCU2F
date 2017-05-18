@@ -1,5 +1,6 @@
-# u2f-jc-applet
-This U2F JavaCard Applet is based on the [Ledger U2F Applet](https://github.com/LedgerHQ/ledger-u2f-javacard). I imported this applet to Eclipse with installed JCOP Tools and modified the AID of this applet to the standardized AID for FIDO NFC token (	0xA0000006472F0001). I also provided some example data ([Attestation Certificate and Key](u2f-javacard/U2F Example Attestation Certificate and Key Bytes.txt)) to bring this applet to run. The example data is sourced in the specification [FIDO U2F Raw Message Formats] (https://fidoalliance.org/specs/fido-u2f-v1.0-nfc-bt-amendment-20150514/fido-u2f-raw-message-formats.html#examples).
+# FIFO CCU2F Javacard Applet
+This CCU2F JavaCard Applet is based on the [Ledger U2F Applet](https://github.com/LedgerHQ/ledger-u2f-javacard). I imported this applet to Eclipse with installed JCOP Tools and modified the AID of this applet to the standardized AID for FIDO NFC token (	0xA0000006472F0001). I also provided some example data ([Attestation Certificate and Key](u2f-javacard/U2F Example Attestation Certificate and Key Bytes.txt)) to bring this applet to run. The example data is sourced in the specification [FIDO U2F Raw Message Formats] (https://fidoalliance.org/specs/fido-u2f-v1.0-nfc-bt-amendment-20150514/fido-u2f-raw-message-formats.html#examples).
+This Applet was succesfully tested on JCOP v2.4.2 R3 cards. This implementation uses the KeyAgreementX.ALG_EC_SVDP_DH_PLAIN_XY from NXPs JCOP library for EC Point Multiplication. Other cards may have similar functions which can be used instead. 
 
 ## Installing
 The following install parameters are expected : 
