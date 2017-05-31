@@ -31,19 +31,18 @@ import javacard.security.KeyBuilder;
 import javacard.security.KeyPair;
 import javacard.security.MessageDigest;
 import javacard.security.RandomData;
-import javacard.security.Signature;
 
 import com.nxp.id.jcopx.KeyAgreementX;
 import com.nxp.id.jcopx.KeyBuilderX;
-import com.nxp.id.jcopx.SignatureX;
 
 public class FIDOCCImplementation implements FIDOAPI {
 
     private static KeyPair keyPair;
-    private static AESKey macKey;
+    private static AESKey macKey1, macKey2;
+//    private static AESKey macKey;
     private static byte[] seed;
-    private static Signature cmacSign;
-    private static Signature cmacVerify;
+//    private static Signature cmacSign;
+//    private static Signature cmacVerify;
     private static RandomData random;
     private static byte[] scratch;    
     private static KeyAgreement ecMultiplyHelper;
@@ -69,15 +68,23 @@ public class FIDOCCImplementation implements FIDOAPI {
         sha256 = MessageDigest.getInstance(MessageDigest.ALG_SHA_256, false);
         
         // Initialize the unique key for MAC function (AES CMAC)
-        macKey = (AESKey)KeyBuilderX.buildKey(KeyBuilderX.TYPE_AES_STATIC, KeyBuilder.LENGTH_AES_128, false);
+//        macKey = (AESKey)KeyBuilderX.buildKey(KeyBuilderX.TYPE_AES_STATIC, KeyBuilder.LENGTH_AES_128, false);
+//        random.generateData(scratch, (short)0, (short)16);
+//        macKey.setKey(scratch, (short)0);
+//        
+//        cmacSign = SignatureX.getInstance(SignatureX.ALG_AES_CMAC16, false);
+//        cmacSign.init(macKey, Signature.MODE_SIGN);
+//        
+//        cmacVerify = SignatureX.getInstance(SignatureX.ALG_AES_CMAC16, false);
+//        cmacVerify.init(macKey, Signature.MODE_VERIFY);
+        
+        // Initialize the unique keys for MAC function
+        macKey1 = (AESKey)KeyBuilderX.buildKey(KeyBuilderX.TYPE_AES_STATIC, KeyBuilder.LENGTH_AES_128, false);
+        macKey2 = (AESKey)KeyBuilderX.buildKey(KeyBuilderX.TYPE_AES_STATIC, KeyBuilder.LENGTH_AES_128, false);
         random.generateData(scratch, (short)0, (short)16);
-        macKey.setKey(scratch, (short)0);
-        
-        cmacSign = SignatureX.getInstance(SignatureX.ALG_AES_CMAC16, false);
-        cmacSign.init(macKey, Signature.MODE_SIGN);
-        
-        cmacVerify = SignatureX.getInstance(SignatureX.ALG_AES_CMAC16, false);
-        cmacVerify.init(macKey, Signature.MODE_VERIFY);
+        macKey1.setKey(scratch, (short)0);
+        random.generateData(scratch, (short)0, (short)16);
+        macKey2.setKey(scratch, (short)0);
         
         // Initialize ecMultiplier 
         ecMultiplyHelper = KeyAgreementX.getInstance(KeyAgreementX.ALG_EC_SVDP_DH_PLAIN_XY, false);
@@ -131,7 +138,17 @@ public class FIDOCCImplementation implements FIDOAPI {
 		sha256.doFinal(hmacBuffer, (short)0, (short)(BLOCKSIZE+HASHSIZE), mac, mac_offset);
 		
 		return HASHSIZE;
-}
+    }
+    
+    private void calcMAC(byte[] applicationParameter, short applicationParameterOffset, byte[] nonceBuffer, short nonceBufferOffset) {
+		macKey1.getKey(scratch, (short) 0);
+		sha256.reset();
+		sha256.update(scratch, (short)0, (short) 16);
+		sha256.update(applicationParameter, applicationParameterOffset, (short) 32);
+		sha256.update(nonceBuffer, nonceBufferOffset, (short) 32);
+		macKey2.getKey(scratch, (short) 0);
+		sha256.doFinal(scratch, (short) 0, (short) 16, scratch, (short)0);		
+	}
 
     public short generateKeyAndWrap(byte[] applicationParameter, short applicationParameterOffset, ECPrivateKey generatedPrivateKey, byte[] publicKey, short publicKeyOffset, byte[] keyHandle, short keyHandleOffset) {
         // Generate 48 byte nonce
@@ -150,16 +167,27 @@ public class FIDOCCImplementation implements FIDOAPI {
     	Util.arrayFillNonAtomic(scratch, (short)0, (short)32, (byte)0x00);
     	((ECPrivateKey)keyPair.getPrivate()).setS(scratch, (short) 0, (short) 32);
     	
-    	cmacSign.update(applicationParameter, applicationParameterOffset, (short) 32);
-    	cmacSign.sign(keyHandle, keyHandleOffset, (short) 48, keyHandle, (short) (keyHandleOffset + 48));
+//    	cmacSign.update(applicationParameter, applicationParameterOffset, (short) 32);
+//    	cmacSign.sign(keyHandle, keyHandleOffset, (short) 48, keyHandle, (short) (keyHandleOffset + 48));
+    	calcMAC(applicationParameter, applicationParameterOffset, keyHandle, keyHandleOffset);
+    	Util.arrayCopyNonAtomic(scratch, (short) 0, keyHandle, (short) (keyHandleOffset + 32), (short) 32);
         
         return (short)64;
     }
 
     public boolean unwrap(byte[] keyHandle, short keyHandleOffset, short keyHandleLength, byte[] applicationParameter, short applicationParameterOffset, ECPrivateKey unwrappedPrivateKey) {
-        // Verify
-    	cmacVerify.update(applicationParameter, applicationParameterOffset, (short) 32);
-    	if (!cmacVerify.verify(keyHandle, keyHandleOffset, (short) 48, keyHandle, (short) (keyHandleOffset + 48), (short) 16)) {
+//        // Verify
+//    	cmacVerify.update(applicationParameter, applicationParameterOffset, (short) 32);
+//    	if (!cmacVerify.verify(keyHandle, keyHandleOffset, (short) 48, keyHandle, (short) (keyHandleOffset + 48), (short) 16)) {
+//    		return false;
+//    	}
+    	
+    	// Verify
+    	
+    	calcMAC(applicationParameter, applicationParameterOffset, keyHandle, keyHandleOffset);
+    	
+    	//Compare MAC
+    	if (Util.arrayCompare(scratch, (short) 0, keyHandle, (short)(keyHandleOffset+32), (short)32)!=0) {
     		return false;
     	}
     	
