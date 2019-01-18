@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project basedir="." default="install" name="Build and install CCU2F applet for JCOP">
+	<!-- Applet building dependencies -->
+	<property name="JC303" value="extlibs/jc303_kit" />
+	<property name="JCOPX242" value="extlibs/jcopx-2.4.2.R2" />	<!-- api-jcopx-2.4.2_R2-1.0.0.jar -->
+
+
+	<!-- ant-javacard task from javacard.pro -->
+	<taskdef name="javacard" classname="pro.javacard.ant.JavaCard" classpath="tools/ant-javacard.jar" />
+
+	<!-- CCU2F applet on JCOP 2.4.2 R3 card -->
+	<target name="jcop">
+		<javacard jckit="${JC303}">
+			<cap output="cap/ccu2f.cap" aid="A000000647" sources="src">
+				<applet class="de.tsenger.u2f.U2FApplet" aid="A0000006472F0001" />
+				<import exps="${JCOPX242}" jar="${JCOPX242}/api-jcopx-2.4.2_R2-1.0.0.jar" />
+			</cap>
+		</javacard>
+	</target>
+
+	<!-- Install Applet -->
+	<target name="install" depends="jcop">
+		<exec executable="/bin/bash">
+			<arg value="scripts/install+personalize.sh" />
+		</exec>
+	</target>
+</project>

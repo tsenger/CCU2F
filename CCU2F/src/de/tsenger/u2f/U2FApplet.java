@@ -56,8 +56,8 @@ public class U2FApplet extends Applet implements ExtendedLength {
     private static final byte FIDO_INS_VERSION = (byte)0x03;
     private static final byte ISO_INS_GET_DATA = (byte)0xC0;
 
-    private static final byte PROPRIETARY_CLA = (byte)0xF0;
-    private static final byte FIDO_ADM_SET_ATTESTATION_CERT = (byte)0x01;
+    private static final byte PROPRIETARY_CLA = (byte)0x80;
+    private static final byte FIDO_ADM_SET_ATTESTATION_CERT = (byte)0x09;
 
     private static final byte SCRATCH_TRANSPORT_STATE = (byte)0;
     private static final byte SCRATCH_CURRENT_OFFSET = (byte)1;
